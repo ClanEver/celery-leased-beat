@@ -1,0 +1,7 @@
+[formatting]
+# 如果数组项能在一行显示，是否自动将数组折叠到一行
+array_auto_collapse = false
+# 是否按字母顺序重新排序键
+reorder_keys = true
+# 是否按字母顺序重新排序数组项
+reorder_arrays = true

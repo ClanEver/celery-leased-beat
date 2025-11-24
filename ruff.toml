@@ -1,0 +1,133 @@
+# https://docs.astral.sh/ruff/configuration/
+
+# 排除各种常见的应忽略目录
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+line-length = 120
+indent-width = 4
+target-version = "py312"
+
+[lint]
+# https://docs.astral.sh/ruff/rules/
+select = [
+    "N",     # pep8-naming
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "A",     # flake8-builtins
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "COM",   # flake8-commas
+    "YTT",   # flake8-2020
+    "ASYNC", # flake8-async
+    "T10",   # flake8-debugger
+    "PIE",   # flake8-pie
+    "PYI",   # flake8-pyi
+    "PT",    # flake8-pytest-style
+    "RET",   # flake8-return
+    "SIM",   # flake8-simplify
+    "INT",   # flake8-gettext
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib
+    "UP",    # pyupgrade
+    "PL",    # Pylint
+    "PD",    # pandas-vet
+    "NPY",   # NumPy-specific rules
+    "FAST",  # FastAPI
+    "PERF",  # Perflint
+    "FURB",  # refurb
+    "RUF0",  # Ruff-specific rules 0
+
+    # flake8-django
+    "DJ001", # 避免在基于字符串的字段上使用 null=True
+    "DJ003", # 避免将 locals() 作为上下文传递给渲染函数
+    "DJ008", # 模型未定义 __str__ 方法
+    "DJ012", # 模型的内部类、方法和字段的顺序不符合 Django 风格指南
+    "DJ013", # @receiver 装饰器必须位于所有其他装饰器之上
+
+    # other
+    "ISC001", # 单行隐式连接字符串
+    "TID252", # 优先选择绝对导入而不是相对导入
+    "FLY002", # 考虑 f-string 而不是 str.join
+    "C90",    # mccabe 函数复杂度
+]
+ignore = [
+    "RUF001",  # 字符串包含不明确的 unicode 字符
+    "RUF002",  # 文档字符串包含不明确的 unicode 字符
+    "RUF003",  # 注释包含不明确的 unicode 字符
+    "RUF012",  # dict 应使用 TypeDict
+    "PLR0913", # 函数变量过多
+    "PLR2004", # 使用未命名的数字常量
+    "ARG002",  # 未使用的方法参数
+    "PT027",   # 使用pytest.raises
+    # "F401",  # 导入但未使用
+]
+
+# 允许修复所有启用的规则（当提供 `--fix` 时）
+fixable = ["ALL"]
+unfixable = []
+
+# 允许下划线前缀的未使用变量
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# 绝对导入检查范围
+# https://docs.astral.sh/ruff/settings/#lintflake8-tidy-imports
+[lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# mccabe 函数复杂度
+# https://docs.astral.sh/ruff/rules/complex-structure/
+[lint.mccabe]
+max-complexity = 20
+
+[format]
+# 对字符串使用单引号。
+quote-style = "single"
+
+# 使用空格而不是制表符进行缩进。
+indent-style = "space"
+
+# 尊重魔术尾随逗号。
+skip-magic-trailing-comma = false
+
+# 自动检测适当的行尾。
+line-ending = "auto"
+
+# 启用文档字符串中代码示例的自动格式化。支持 Markdown、
+# reStructuredText 代码/文字块和文档测试。
+#
+# 目前默认禁用，但计划在将来改为选择退出。
+docstring-code-format = false
+
+# 设置格式化文档字符串中代码片段时使用的行长度限制。
+#
+# 只有在启用 `docstring-code-format` 设置时才有效。
+docstring-code-line-length = "dynamic"
