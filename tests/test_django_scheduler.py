@@ -148,13 +148,13 @@ def test_leased_django_scheduler_failover(redis_standalone_celery_app: Celery):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_leased_django_scheduler_crash(redis_standalone_celery_app: Celery):
+def test_leased_django_scheduler_crash(redis_standalone_celery_app: Celery):  # noqa: PLR0915
     """
     Crash Failover test for LeasedDjangoScheduler.
     Scenario:
     - 2 Schedulers, LOCK_TTL=0.75, INTERVAL=0.25
     - Task 1: Interval 0.25s
-    - Task 2: Clocked T+2.5s
+    - Task 2: Clocked T+1.75s
     - 0-0.75s: Scheduler 1 runs.
     - 0.75s: Scheduler 1 "crashes" (stops ticking, NO close).
     - 0.75-2.5s: Scheduler 2 runs.
@@ -179,9 +179,8 @@ def test_leased_django_scheduler_crash(redis_standalone_celery_app: Celery):
         task='celery_leased_beat.tests.tasks.crash_interval_task',
     )
 
-    # 2. Clocked Task (T+2.5s)
-    # Give enough time for S1 to run (0.75s) + Lock Expiry (0.75s) + S2 takeover
-    run_time = timezone.now() + timedelta(seconds=2.5)
+    # 2. Clocked Task (T+1.75s)
+    run_time = timezone.now() + timedelta(seconds=1.75)
     clocked_schedule = ClockedSchedule.objects.create(clocked_time=run_time)
     PeriodicTask.objects.create(
         clocked=clocked_schedule,
@@ -192,9 +191,12 @@ def test_leased_django_scheduler_crash(redis_standalone_celery_app: Celery):
 
     # Instantiate Schedulers
     mock_apply_async = MagicMock()
+    def mock_calls():
+        return [call.args[0] for call in mock_apply_async.call_args_list]
 
     class TestScheduler(LeasedDjangoScheduler):
         def send_task(self, *args, **kwargs):
+            print(f'Sending task {args[0]}')
             mock_apply_async(*args, **kwargs)
             return super().send_task(*args, **kwargs)
 
@@ -205,53 +207,59 @@ def test_leased_django_scheduler_crash(redis_standalone_celery_app: Celery):
     print('\n--- Phase 1: Scheduler 1 runs ---')
     for i in range(3):
         print(f'Iteration {i} (Time {i * 0.25}s)')
-        scheduler1.tick()
+        tick_sleep = scheduler1.tick()
+        assert tick_sleep <= 0.25
+        while tick_sleep <= 0:
+            tick_sleep = scheduler1.tick()
+            assert tick_sleep <= 0.25
         assert scheduler1._lease_lock_acquired
+        scheduler2.tick()
+        assert not scheduler2._lease_lock_acquired
         time.sleep(0.25)
+
+    assert mock_calls() == ['celery_leased_beat.tests.tasks.crash_interval_task'] * 2
 
     # Phase 2: Scheduler 1 crashes (we just stop ticking it)
     print('\n--- Phase 2: Scheduler 1 crashes (stops ticking) ---')
     # Do NOT call scheduler1.close()
 
-    # Reset mock
-    mock_apply_async.reset_mock()
-
-    # Phase 3: 0.75-3.25s (Scheduler 2 tries to take over)
+    # Phase 3: 0.75-1.75s (Scheduler 2 tries to take over)
     print('\n--- Phase 3: Scheduler 2 tries to take over ---')
 
-    # Lock TTL is 0.75s. S1 last renewed around T=0.5s.
-    # So lock should expire around T=1.25s.
-
-    lock_acquired_at = -1
-
-    for i in range(10):
-        print(f'Iteration {i} (Time {0.75 + i * 0.25}s)')
-        scheduler2.tick()
-
-        if scheduler2._lease_lock_acquired:
-            if lock_acquired_at == -1:
-                lock_acquired_at = i
-                print(f'!!! Scheduler 2 acquired lock at iter {i} !!!')
-        else:
-            pass
-
-        time.sleep(0.25)
-
-    assert lock_acquired_at != -1, 'Scheduler 2 never acquired the lock'
-    # It should take some time to acquire (at least until TTL expires)
-    # If S1 stopped at T=0.75 (iter 2 finished), lock expires at T=0.5+0.75=1.25.
+    # S1 stopped at T=0.5, lock expires at T=0.5+0.75=1.25.
+    # sleep 0.25
     # S2 starts at T=0.75.
     # Iter 0: 0.75s.
     # Iter 1: 1.00s.
-    # Iter 2: 1.25s. (Expires here)
-    # Iter 3: 1.50s. (Should acquire)
-    # So lock_acquired_at >= 2
-    assert lock_acquired_at >= 2, f'Scheduler 2 acquired lock too early at iter {lock_acquired_at} (TTL=0.75)'
+    # Iter 2: 1.25s. (Should acquire)
+    # Iter 3: 1.50s.
+    # Iter 4: 1.75s.
+    for i in range(5):
+        mock_apply_async.reset_mock()
+        print(f'Iteration {i} (Time {0.75 + i * 0.25}s)')
+        tick_sleep = scheduler2.tick()
+        assert tick_sleep <= 0.25
+        while tick_sleep <= 0:
+            tick_sleep = scheduler2.tick()
+            assert tick_sleep <= 0.25
 
-    # Verify Scheduler 2 sent the clocked task
-    calls = [call.args[0] for call in mock_apply_async.call_args_list]
+        if i <= 1:
+            assert not scheduler2._lease_lock_acquired
+            assert mock_calls() == []
+        elif i == 2:
+            assert scheduler2._lease_lock_acquired
+            print('!!! Scheduler 2 successfully acquired lock at iter 2 !!!')
+            assert mock_calls() == ['celery_leased_beat.tests.tasks.crash_interval_task']
+        elif i == 4:
+            assert scheduler2._lease_lock_acquired
+            assert 'celery_leased_beat.tests.tasks.crash_interval_task' in mock_calls()
+            assert 'celery_leased_beat.tests.tasks.crash_clocked_task' in mock_calls()
+        else:
+            assert scheduler2._lease_lock_acquired
+            assert mock_calls() == ['celery_leased_beat.tests.tasks.crash_interval_task']
 
-    assert 'celery_leased_beat.tests.tasks.crash_clocked_task' in calls
+        time.sleep(0.25)
 
-    scheduler1.close()  # Clean up now
+    # Clean up
+    scheduler1.close()
     scheduler2.close()

@@ -1,5 +1,6 @@
 import socket
 import os
+import time
 import uuid
 import logging
 import urllib.parse
@@ -45,6 +46,7 @@ class LeasedSchedulerMixin(__MixinBase):
         self._lease_lock_acquired: bool = False
         self._lease_renew_threshold: int = max(1, self.lease_lock_ttl // self.lease_interval - 1)
         self._lease_renew_fail_count: int = 0
+        self._lease_last_acquire_time: float = 0.0
 
     @property
     def lease_redis_client(self) -> Redis | RedisCluster:
@@ -87,11 +89,16 @@ class LeasedSchedulerMixin(__MixinBase):
             )
         return cast(Lock, self._lease_lock)
 
+    @property
+    def _time_since_last_lease(self) -> float:
+        return time.time() - self._lease_last_acquire_time
+
     def _acquire_lock(self):
         try:
             # blocking=False means it returns True/False immediately
             acquired = self.lock.acquire(blocking=False, token=self._lease_lock_id)
             if acquired:
+                self._lease_last_acquire_time = time.time()
                 if not self._lease_lock_acquired:
                     logger.info(
                         "Acquired lock '%s' with id %s. Becoming leader.",
@@ -108,9 +115,8 @@ class LeasedSchedulerMixin(__MixinBase):
 
     def _renew_lock(self):
         try:
-            # extend() adds time to the lock.
-            # We extend by the TTL.
-            _ = self.lock.extend(self.lease_lock_ttl)
+            _ = self.lock.reacquire()
+            self._lease_last_acquire_time = time.time()
             self._lease_renew_fail_count = 0
             logger.debug('Renewed lock.')
             return True
@@ -118,12 +124,12 @@ class LeasedSchedulerMixin(__MixinBase):
             self._lease_renew_fail_count += 1
             if self._lease_renew_fail_count < self._lease_renew_threshold:
                 logger.warning(
-                    'Failed to renew lock (count %d/%d), ignoring failure: %s',
+                    'Failed to renew lock (count %d/%d), skip temporary failure: %s',
                     self._lease_renew_fail_count,
                     self._lease_renew_threshold,
                     e,
                 )
-                return True
+                return False
 
             logger.warning('Failed to renew lock (lost ownership): %s', e)
             self._lease_lock_acquired = False
@@ -134,10 +140,9 @@ class LeasedSchedulerMixin(__MixinBase):
         Run a tick of the scheduler.
         """
         if self._lease_lock_acquired:
-            if not self._renew_lock():
-                logger.info('Lost lock, stepping down.')
-                # We lost the lock, so we shouldn't process tasks.
-                # We should try to acquire it again in the next loop.
+            if self._time_since_last_lease < self.lease_interval:
+                pass
+            elif not self._renew_lock():
                 return self.lease_interval
         elif self._acquire_lock():
             # Just acquired.
@@ -148,7 +153,10 @@ class LeasedSchedulerMixin(__MixinBase):
             return self.lease_interval
 
         # If we are here, we hold the lock
-        return min(self.lease_interval, super().tick(*args, **kwargs))
+        return min(
+            self.lease_interval - self._time_since_last_lease,
+            super().tick(*args, **kwargs),
+        )
 
     def close(self):
         """Release the lock on close."""

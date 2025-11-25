@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -88,7 +89,7 @@ def test_renew_lock_success(app, mock_redis, mock_scheduler_deps):
 
     scheduler.tick()
 
-    mock_lock.extend.assert_called_with(10)
+    mock_lock.reacquire.assert_called_with()
     assert scheduler._lease_lock_acquired
     mock_tick.assert_called()
 
@@ -104,21 +105,22 @@ def test_renew_lock_tolerance_success(app, mock_redis, mock_scheduler_deps):
     scheduler._lease_lock = mock_lock
 
     # Simulate one failure (LockError)
-    mock_lock.extend.side_effect = LockError('Temporary failure')
+    mock_lock.reacquire.side_effect = LockError('Temporary failure')
 
     # First tick with failure
     scheduler.tick()
 
     # Should still hold lock because threshold (60/15 - 1 = 3) > 1
     assert scheduler._lease_lock_acquired
-    mock_tick.assert_called()
+    mock_tick.assert_not_called()
 
     # Reset side effect for next call to simulate recovery
-    mock_lock.extend.side_effect = None
+    mock_lock.reacquire.side_effect = None
 
     scheduler.tick()
     assert scheduler._lease_lock_acquired
     assert scheduler._lease_renew_fail_count == 0
+    mock_tick.assert_called()
 
 
 def test_renew_lock_tolerance_failure(app, mock_redis):
@@ -133,7 +135,7 @@ def test_renew_lock_tolerance_failure(app, mock_redis):
     mock_redis.lock.return_value = mock_lock
     scheduler._lease_lock = mock_lock
 
-    mock_lock.extend.side_effect = LockError('Persistent failure')
+    mock_lock.reacquire.side_effect = LockError('Persistent failure')
 
     # Threshold is 3.
     # 1st fail
@@ -162,8 +164,8 @@ def test_renew_lock_failure(app, mock_redis):
     mock_redis.lock.return_value = mock_lock
     scheduler._lease_lock = mock_lock
 
-    # extend raises LockError if failed (e.g. lost lock)
-    mock_lock.extend.side_effect = LockError('Lost lock')
+    # reacquire raises LockError if failed (e.g. lost lock)
+    mock_lock.reacquire.side_effect = LockError('Lost lock')
 
     scheduler.tick()
 
