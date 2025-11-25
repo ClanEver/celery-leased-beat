@@ -79,7 +79,7 @@ class LeasedSchedulerMixin(__MixinBase):
         return self._lease_redis_client
 
     @property
-    def lock(self) -> Lock:
+    def lease_lock(self) -> Lock:
         if self._lease_lock is None:
             # Create a lock object with our custom ID
             self._lease_lock = self.lease_redis_client.lock(
@@ -96,7 +96,7 @@ class LeasedSchedulerMixin(__MixinBase):
     def _acquire_lock(self):
         try:
             # blocking=False means it returns True/False immediately
-            acquired = self.lock.acquire(blocking=False, token=self._lease_lock_id)
+            acquired = self.lease_lock.acquire(blocking=False, token=self._lease_lock_id)
             if acquired:
                 self._lease_last_acquire_time = time.time()
                 if not self._lease_lock_acquired:
@@ -115,7 +115,7 @@ class LeasedSchedulerMixin(__MixinBase):
 
     def _renew_lock(self):
         try:
-            _ = self.lock.reacquire()
+            _ = self.lease_lock.reacquire()
             self._lease_last_acquire_time = time.time()
             self._lease_renew_fail_count = 0
             logger.debug('Renewed lock.')
@@ -162,7 +162,8 @@ class LeasedSchedulerMixin(__MixinBase):
         """Release the lock on close."""
         if self._lease_lock_acquired:
             try:
-                self.lock.release()
+                self.lease_lock.local.token = self._lease_lock_id
+                self.lease_lock.release()
                 logger.info('Released lock.')
             except (RedisError, LockError) as e:
                 logger.error('Error releasing lock: %s', e)
