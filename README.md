@@ -1,3 +1,9 @@
+<div dir="ltr" align=center>
+
+**ENGLISH 🇺🇸** / [**简体中文 🇨🇳**](README_cn.md)
+
+</div>
+
 # Celery Leased Beat
 
 Celery Beat with leader election using Redis.

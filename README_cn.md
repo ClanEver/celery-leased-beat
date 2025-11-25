@@ -1,3 +1,9 @@
+<div dir="ltr" align=center>
+
+[**ENGLISH 🇺🇸**](README.md) / **简体中文 🇨🇳**
+
+</div>
+
 # Celery Leased Beat
 
 带有选主功能的 Celery Beat。
