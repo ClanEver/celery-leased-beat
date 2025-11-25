@@ -17,7 +17,10 @@ run = [
 ]
 
 [tasks.build]
-run = 'uv build'
+run = [
+    'rm -rf ./dist',
+    'uv build',
+]
 
 [tasks.test-release]
 depends = "build"
