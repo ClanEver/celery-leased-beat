@@ -1,0 +1,28 @@
+[settings]
+python.uv_venv_auto = true
+task_output = "interleave"
+jobs = 16
+
+[tasks.test]
+run = [
+    'command -v docker >/dev/null 2>&1 || { echo "please install docker"; exit 1; }',
+    'uv run -- pytest -n auto',
+]
+
+[tasks.tox]
+run = [
+    'command -v docker >/dev/null 2>&1 || { echo "please install docker"; exit 1; }',
+    'command -v tox >/dev/null 2>&1 || { echo "please install tox: uv tools install tox --with tox-uv"; exit 1; }',
+    'tox'
+]
+
+[tasks.build]
+run = 'uv build'
+
+[tasks.test-release]
+depends = "build"
+run = 'uv publish --index testpypi'
+
+[tasks.release]
+depends = "build"
+run = 'uv publish'
