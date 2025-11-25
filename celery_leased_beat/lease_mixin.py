@@ -91,14 +91,14 @@ class LeasedSchedulerMixin(__MixinBase):
 
     @property
     def _time_since_last_lease(self) -> float:
-        return time.time() - self._lease_last_acquire_time
+        return time.monotonic() - self._lease_last_acquire_time
 
     def _acquire_lock(self):
         try:
             # blocking=False means it returns True/False immediately
             acquired = self.lease_lock.acquire(blocking=False, token=self._lease_lock_id)
             if acquired:
-                self._lease_last_acquire_time = time.time()
+                self._lease_last_acquire_time = time.monotonic()
                 if not self._lease_lock_acquired:
                     logger.info(
                         "Acquired lock '%s' with id %s. Becoming leader.",
@@ -116,7 +116,7 @@ class LeasedSchedulerMixin(__MixinBase):
     def _renew_lock(self):
         try:
             _ = self.lease_lock.reacquire()
-            self._lease_last_acquire_time = time.time()
+            self._lease_last_acquire_time = time.monotonic()
             self._lease_renew_fail_count = 0
             logger.debug('Renewed lock.')
             return True
