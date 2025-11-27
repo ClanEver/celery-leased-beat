@@ -1,5 +1,3 @@
-import time
-
 import pytest
 from celery import Celery
 from pytest_docker_tools.wrappers import Container
@@ -24,9 +22,6 @@ def celery_app(redis_sentinel: Container) -> Celery:
 
 
 def test_sentinel_lease_acquire(celery_app):
-    # Wait for sentinel to sync
-    time.sleep(5)
-
     scheduler = LeasedScheduler(app=celery_app)
 
     # Try to acquire lock

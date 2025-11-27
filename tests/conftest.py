@@ -1,7 +1,5 @@
-import os
 from pathlib import Path
 
-import django
 import pytest
 from celery import Celery
 from pytest_docker_tools import container
@@ -23,11 +21,6 @@ def cleanup_schedule_db():
     for db_file in db_files:
         Path(db_file).unlink(missing_ok=True)
         Path(db_file + '.db').unlink(missing_ok=True)
-
-
-def pytest_configure():
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.django_settings')
-    django.setup()
 
 
 redis_standalone = container(  # pyright: ignore[reportCallIssue]
@@ -55,20 +48,16 @@ redis_sentinel = container(  # pyright: ignore[reportCallIssue]
         'SENTINEL': 'true',
     },
     ports={
-        # sentinel
         '5000/tcp': None,
-        '5001/tcp': None,
-        '5002/tcp': None,
-        # master
-        '7000/tcp': None,
-        '7001/tcp': None,
-        '7002/tcp': None,
-        # slave
-        '7003/tcp': None,
-        '7004/tcp': None,
-        '7005/tcp': None,
     },
     stop_signal='SIGKILL',
+    healthcheck={
+        'test': "redis-cli -p 5000 ping && redis-cli -p 7000 ping",
+        'interval': int(0.1 * 10e9),
+        'timeout': int(0.1 * 10e9),
+        'retries': 100,
+        'start_period': int(0.1 * 10e9),
+    },
 )
 
 

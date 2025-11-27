@@ -1,5 +1,6 @@
 import time
 from datetime import timedelta
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -43,7 +44,7 @@ def test_leased_django_scheduler_integration(redis_standalone_celery_app: Celery
     assert client.get(scheduler.lease_lock_key) is not None
 
     # Verify scheduler loaded tasks from DB
-    assert 'test_task' in scheduler.schedule
+    assert 'test_task' in cast(dict, scheduler.schedule)
 
     # Cleanup
     scheduler.close()
