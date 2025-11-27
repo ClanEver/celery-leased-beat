@@ -68,7 +68,6 @@ class LeasedSchedulerMixin(__MixinBase):
                 sentinel = Sentinel(
                     sentinels,
                     sentinel_kwargs=self.lease_options.get('sentinel_kwargs', {}),
-                    **conn_params,
                 )
                 self._lease_redis_client = sentinel.master_for(
                     self.lease_options['master_name'],
